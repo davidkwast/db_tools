@@ -2,6 +2,20 @@ import psycopg2
 from psycopg2.sql import SQL, Identifier
 
 
+REDSHIFT_TO_POSTGRE = {
+    'character varying':           'text',
+    'character':                   'text',
+    'numeric':                     'numeric',
+    'int':                         'int',
+    'smallint':                    'smallint',
+    'real':                        'real',
+    'double precision':            'double precision',
+    'date':                        'date',
+    'timestamp without time zone': 'timestamp without time zone',
+    'timestamp with time zone':    'timestamp with time zone'
+}
+
+
 class Cluster:
     
     def __init__(self, dbname, user, password, host='localhost', port=5439):
@@ -26,30 +40,141 @@ class Cluster:
         cur.close()
         return [r[0] for r in rows]
     
-    def get_table_columns(self, schema, table):
+    def get_table_row_count(self, schema, table):
+        cur = self.conn.cursor()
+        cur.execute(SQL("SELECT COUNT(1) FROM {}.{};").format(Identifier(schema), Identifier(table)))
+        result = cur.fetchone()
+        return result[0]
+    
+    def get_table_data__generator(self, schema, table, offset=None, limit=None):
+        cur = self.conn.cursor()
+        sql = "SELECT * FROM {}.{}"
+        if offset and limit:
+            sql = sql + 'OFFSET %s LIMIT %s'
+        sql = SQL(sql).format(Identifier(schema), Identifier(table))
+        if offset and limit:
+            cur.execute(sql, (offset, limit))
+        else:
+            cur.execute(sql)
+        for row in cur:
+            yield row
+        cur.close()
+    
+    def get_table_schema__dict(self, schema, table):
         cur = self.conn.cursor()
         cur.execute("""
-            SELECT c.column_name, c.udt_name, c.data_type
+            SELECT c.column_name, c.udt_name, c.data_type,
+				c.is_nullable, c.character_maximum_length,
+				c.numeric_precision, c.numeric_scale
                 from pg_catalog.pg_statio_all_tables as st
                 inner join pg_catalog.pg_description pgd on (pgd.objoid=st.relid)
                 right outer join information_schema.columns c
                     on (pgd.objsubid=c.ordinal_position
                     and  c.table_schema=st.schemaname
                     and c.table_name=st.relname)
-                where table_schema =  %(table_schema)s and table_name = %(table_name)s;""",
+                where table_schema =  %(table_schema)s and table_name = %(table_name)s
+                order by ordinal_position;""",
             {'table_schema': schema, 'table_name': table},
         )
         rows = cur.fetchall()
         cur.close()
-        return [{'name':r[0],'udt_name':r[1],'data_type':r[2]} for r in rows]
+        return [{
+                'name': r[0],
+                'udt_name': r[1],
+                'data_type': r[2],
+                'is_nullable': r[3],
+                'character_maximum_length': r[4],
+                'numeric_precision': r[5],
+                'numeric_scale': r[6],
+            } for r in rows]
     
-    def get_table_data(self, schema, table):
-        cur = self.conn.cursor()
-        cur.execute(SQL("SELECT * FROM {}.{};").format(Identifier(schema), Identifier(table)))
-        rows = cur.fetchall()
-        cur.close()
-        return rows
     
+    def get_table__sql_create(self, schema, table):
+        
+        data = self.get_table_schema__dict(schema, table)
+        if not data:
+            raise ValueError('database "{}" not found'.format(schema + '.' + table))
+        
+        schema_table = schema + '.' + table
+        sql = "-- TABLE {}\n".format(schema_table)
+        
+        schema_table = schema_table.replace('-','_')
+        sql += "CREATE TABLE {} (\n".format(schema_table)
+        
+        # injects primary key
+        sql += '    id bigserial PRIMARY KEY,\n'
+        
+        for count, column in enumerate(data):
+            sql += ' '*4
+            
+            pg_data_type = REDSHIFT_TO_POSTGRE[column['data_type']]
+            
+            if pg_data_type == 'numeric':
+                pg_data_type = '{}({},{})'.format(pg_data_type, column['numeric_precision'], column['numeric_scale'])
+            sql += '{} {}'.format(column['name'], pg_data_type)
+            
+            if column['is_nullable'] == 'NO':
+                sql += ' NOT NULL'
+            
+            if count < len(data) - 1:
+                sql += ','
+            
+            sql += '\n'
+        
+        sql += ");\n\n"
+        return sql
+    
+    
+    def get_table__sql_dump_data__generator(self, schema, table, offset=None, limit=None):
+        
+        columns_schema = self.get_table_schema__dict(schema, table)
+        
+        for columns_data in self.get_table_data__generator(schema, table, offset, limit):
+        
+            sql = "INSERT INTO {} (".format(schema + '.' + table)
+            
+            for count, column_schema in enumerate(columns_schema):
+                sql += column_schema['name']
+                if count < len(columns_schema) - 1:
+                    sql += ', '
+            
+            sql += ") VALUES ("
+            
+            for count, (column_schema, row_data) in enumerate(zip(columns_schema,columns_data)):
+                pg_data_type = REDSHIFT_TO_POSTGRE[column_schema['data_type']]
+                value = row_data
+                
+                if value is not None:
+                    if pg_data_type == 'date':
+                        value = "'{}'".format(value.isoformat())
+                    
+                    elif pg_data_type in ['int','real','numeric','double precision','smallint']:
+                        value = str(value)
+                    
+                    elif pg_data_type == 'text':
+                        
+                        if value:
+                            value = "'{}'".format(value)
+                        else:
+                            value = 'NULL'
+                    
+                    else:
+                        print('-'*80)
+                        print(column_schema)
+                        print(row_data)
+                        raise ValueError('ERROR: CHECK VALUE CONVERSION')
+                
+                else:
+                    value = 'NULL'
+                
+                sql += value
+                if count < len(columns_data) - 1:
+                    sql += ', '
+            
+            sql += ");\n"
+            yield sql
+    
+
     def disconnect(self):
         try:
             self.conn.close()

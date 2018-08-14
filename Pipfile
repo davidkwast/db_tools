@@ -6,6 +6,7 @@ name = "pypi"
 [packages]
 ddlparse = "*"
 "psycopg2-binary" = "*"
+tqdm = "*"
 
 [dev-packages]
 db-tools = {editable = true, path = "."}
