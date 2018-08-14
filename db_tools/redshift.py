@@ -42,7 +42,7 @@ class Cluster:
     
     def get_table_row_count(self, schema, table):
         cur = self.conn.cursor()
-        cur.execute(SQL("SELECT COUNT(1) FROM {}.{};").format(Identifier(schema), Identifier(table)))
+        cur.execute(SQL("SELECT COUNT(*) FROM {}.{};").format(Identifier(schema), Identifier(table)))
         result = cur.fetchone()
         return result[0]
     
@@ -113,8 +113,8 @@ class Cluster:
                 pg_data_type = '{}({},{})'.format(pg_data_type, column['numeric_precision'], column['numeric_scale'])
             sql += '{} {}'.format(column['name'], pg_data_type)
             
-            if column['is_nullable'] == 'NO':
-                sql += ' NOT NULL'
+            # if column['is_nullable'] == 'NO':
+            #     sql += ' NOT NULL'
             
             if count < len(data) - 1:
                 sql += ','
