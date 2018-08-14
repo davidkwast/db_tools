@@ -49,10 +49,10 @@ class Cluster:
     def get_table_data__generator(self, schema, table, offset=None, limit=None):
         cur = self.conn.cursor()
         sql = "SELECT * FROM {}.{}"
-        if offset is None and limit is None:
-            sql = sql + 'OFFSET %s LIMIT %s'
+        if offset is not None and limit is not None:
+            sql = sql + ' OFFSET %s LIMIT %s'
         sql = SQL(sql).format(Identifier(schema), Identifier(table))
-        if offset and limit:
+        if offset is not None and limit is not None:
             cur.execute(sql, (offset, limit))
         else:
             cur.execute(sql)
