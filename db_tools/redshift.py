@@ -89,13 +89,16 @@ class Cluster:
             } for r in rows]
     
     
-    def get_table__sql_create(self, schema, table):
+    def get_table__sql_create(self, schema, table, pg_schema=None):
+        
+        if pg_schema is None:
+            pg_schema = schema
         
         data = self.get_table_schema__dict(schema, table)
         if not data:
             raise ValueError('database "{}" not found'.format(schema + '.' + table))
         
-        schema_table = schema + '.' + table
+        schema_table = pg_schema + '.' + table
         sql = "-- TABLE {}\n".format(schema_table)
         
         schema_table = schema_table.replace('-','_')
@@ -125,13 +128,16 @@ class Cluster:
         return sql
     
     
-    def get_table__sql_dump_data__generator(self, schema, table, offset=None, limit=None):
+    def get_table__sql_dump_data__generator(self, schema, table, offset=None, limit=None, pg_schema=None):
+        
+        if pg_schema is None:
+            pg_schema = schema
         
         columns_schema = self.get_table_schema__dict(schema, table)
         
         for columns_data in self.get_table_data__generator(schema, table, offset, limit):
         
-            sql = "INSERT INTO {} (".format(schema + '.' + table)
+            sql = "INSERT INTO {} (".format(pg_schema + '.' + table)
             
             for count, column_schema in enumerate(columns_schema):
                 sql += column_schema['name']
