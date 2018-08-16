@@ -5,14 +5,6 @@ from psycopg2.sql import SQL, Identifier
 REDSHIFT_TO_POSTGRE = {
     'character varying':           'text',
     'character':                   'text',
-    'numeric':                     'numeric',
-    'int':                         'int',
-    'smallint':                    'smallint',
-    'real':                        'real',
-    'double precision':            'double precision',
-    'date':                        'date',
-    'timestamp without time zone': 'timestamp without time zone',
-    'timestamp with time zone':    'timestamp with time zone'
 }
 
 
@@ -110,7 +102,11 @@ class Cluster:
         for count, column in enumerate(data):
             sql += ' '*4
             
-            pg_data_type = REDSHIFT_TO_POSTGRE[column['data_type']]
+            data_type = column['data_type']
+            if data_type in REDSHIFT_TO_POSTGRE:
+                pg_data_type = REDSHIFT_TO_POSTGRE[data_type]
+            else:
+                pg_data_type = data_type
             
             if pg_data_type == 'numeric':
                 pg_data_type = '{}({},{})'.format(pg_data_type, column['numeric_precision'], column['numeric_scale'])
@@ -147,7 +143,13 @@ class Cluster:
             sql += ") VALUES ("
             
             for count, (column_schema, row_data) in enumerate(zip(columns_schema,columns_data)):
-                pg_data_type = REDSHIFT_TO_POSTGRE[column_schema['data_type']]
+                
+                data_type = column_schema['data_type']
+                if data_type in REDSHIFT_TO_POSTGRE:
+                    pg_data_type = REDSHIFT_TO_POSTGRE[data_type]
+                else:
+                    pg_data_type = data_type
+                
                 value = row_data
                 
                 if value is not None:
@@ -160,7 +162,7 @@ class Cluster:
                     elif pg_data_type == 'text':
                         
                         if value:
-                            value = "'{}'".format(value)
+                            value = str(psycopg2.extensions.QuotedString(value))
                         else:
                             value = 'NULL'
                     
