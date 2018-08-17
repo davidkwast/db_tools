@@ -49,7 +49,7 @@ class Cluster:
         else:
             cur.execute(sql)
         for row in cur:
-            yield row
+            yield row, cur.rowcount
         cur.close()
     
     def get_table_schema__dict(self, schema, table):
@@ -94,6 +94,7 @@ class Cluster:
         sql = "-- TABLE {}\n".format(schema_table)
         
         schema_table = schema_table.replace('-','_')
+        sql += "DROP TABLE {};\n".format(schema_table)
         sql += "CREATE TABLE {} (\n".format(schema_table)
         
         # injects primary key
@@ -131,17 +132,27 @@ class Cluster:
         
         columns_schema = self.get_table_schema__dict(schema, table)
         
-        for columns_data in self.get_table_data__generator(schema, table, offset, limit):
+        first = True
+        for row_index, (columns_data, row_count) in enumerate(self.get_table_data__generator(schema, table, offset, limit)):
         
-            sql = "INSERT INTO {} (".format(pg_schema + '.' + table)
+            sql = ""
             
-            for count, column_schema in enumerate(columns_schema):
-                sql += column_schema['name']
-                if count < len(columns_schema) - 1:
-                    sql += ', '
+            if first:
+                first = False
+                
+                sql += "INSERT INTO {} (".format(pg_schema + '.' + table)
+                
+                for count, column_schema in enumerate(columns_schema):
+                    sql += column_schema['name']
+                    if count < len(columns_schema) - 1:
+                        sql += ', '
+                
+                sql += ") VALUES \n\n"
             
-            sql += ") VALUES ("
+            else:
+                pass
             
+            values = []
             for count, (column_schema, row_data) in enumerate(zip(columns_schema,columns_data)):
                 
                 data_type = column_schema['data_type']
@@ -175,12 +186,15 @@ class Cluster:
                 else:
                     value = 'NULL'
                 
-                sql += value
-                if count < len(columns_data) - 1:
-                    sql += ', '
+                values.append(value)
             
-            sql += ");\n"
+            sql += '(' + ','.join(values) + ')'
+            if row_index < row_count - 1:
+                sql += ','
+            
             yield sql
+        
+        yield '\n;'
     
 
     def disconnect(self):
