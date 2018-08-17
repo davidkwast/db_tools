@@ -132,6 +132,8 @@ class Cluster:
         
         columns_schema = self.get_table_schema__dict(schema, table)
         
+        print('INSERT...')
+        
         first = True
         for row_index, (columns_data, row_count) in enumerate(self.get_table_data__generator(schema, table, offset, limit)):
         
