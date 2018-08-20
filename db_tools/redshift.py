@@ -169,7 +169,7 @@ class Cluster:
                         if value:
                             value = str(psycopg2.extensions.QuotedString(value))
                         else:
-                            value = 'NULL':
+                            value = 'NULL'
                         
                     elif pg_data_type in 'date':
                         value = "'{}'".format(value.isoformat())
