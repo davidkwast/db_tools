@@ -153,7 +153,7 @@ class Cluster:
             else:
                 pass
             
-            values = [pk]
+            values = [str(pk)]
             for count, (column_schema, row_data) in enumerate(zip(columns_schema,columns_data)):
                 
                 data_type = column_schema['data_type']
