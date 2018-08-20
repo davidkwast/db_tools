@@ -197,6 +197,8 @@ class Cluster:
                 sql += ','
             
             yield sql
+            
+            pk += 1
         
         yield '\n;'
     
