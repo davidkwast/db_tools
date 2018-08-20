@@ -132,6 +132,7 @@ class Cluster:
         
         columns_schema = self.get_table_schema__dict(schema, table)
         
+        pk = 0
         first = True
         for row_index, (columns_data, row_count) in enumerate(self.get_table_data__generator(schema, table, offset, limit)):
         
@@ -140,7 +141,7 @@ class Cluster:
             if first:
                 first = False
                 
-                sql += "INSERT INTO {} (".format(pg_schema + '.' + table)
+                sql += "INSERT INTO {} (pk, ".format(pg_schema + '.' + table)
                 
                 for count, column_schema in enumerate(columns_schema):
                     sql += column_schema['name']
@@ -152,7 +153,7 @@ class Cluster:
             else:
                 pass
             
-            values = []
+            values = [pk]
             for count, (column_schema, row_data) in enumerate(zip(columns_schema,columns_data)):
                 
                 data_type = column_schema['data_type']
@@ -177,7 +178,7 @@ class Cluster:
                     elif pg_data_type in ['timestamp without time zone','timestamp with time zone']:
                         value = "'{}'".format(value.isoformat())
                     
-                    elif pg_data_type in ['integer','real','numeric','double precision','smallint']:
+                    elif pg_data_type in ['integer','real','numeric','double precision','smallint','bigint']:
                         value = str(value)
                     
                     else:
