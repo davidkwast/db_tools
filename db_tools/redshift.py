@@ -177,7 +177,7 @@ class Cluster:
                     elif pg_data_type in ['timestamp without time zone','timestamp with time zone']:
                         value = "'{}'".format(value.isoformat())
                     
-                    elif pg_data_type in ['int','real','numeric','double precision','smallint']:
+                    elif pg_data_type in ['integer','real','numeric','double precision','smallint']:
                         value = str(value)
                     
                     else:
