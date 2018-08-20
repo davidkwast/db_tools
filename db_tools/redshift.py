@@ -141,7 +141,7 @@ class Cluster:
             if first:
                 first = False
                 
-                sql += "INSERT INTO {} (pk, ".format(pg_schema + '.' + table)
+                sql += "INSERT INTO {} (id, ".format(pg_schema + '.' + table)
                 
                 for count, column_schema in enumerate(columns_schema):
                     sql += column_schema['name']
