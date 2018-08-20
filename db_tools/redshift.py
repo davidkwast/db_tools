@@ -164,18 +164,21 @@ class Cluster:
                 value = row_data
                 
                 if value is not None:
-                    if pg_data_type == 'date':
-                        value = "'{}'".format(value.isoformat())
-                    
-                    elif pg_data_type in ['int','real','numeric','double precision','smallint']:
-                        value = str(value)
-                    
-                    elif pg_data_type == 'text':
+                    if pg_data_type == 'text':
                         
                         if value:
                             value = str(psycopg2.extensions.QuotedString(value))
                         else:
-                            value = 'NULL'
+                            value = 'NULL':
+                        
+                    elif pg_data_type in 'date':
+                        value = "'{}'".format(value.isoformat())
+                    
+                    elif pg_data_type in ['timestamp without time zone','timestamp with time zone']:
+                        value = "'{}'".format(value.isoformat())
+                    
+                    elif pg_data_type in ['int','real','numeric','double precision','smallint']:
+                        value = str(value)
                     
                     else:
                         print('-'*80)
