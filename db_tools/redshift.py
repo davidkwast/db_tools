@@ -19,6 +19,7 @@ class Cluster:
                 host=host,
                 port=port
             )
+            self.pk = 1
         except:
             raise
     
@@ -83,6 +84,8 @@ class Cluster:
     
     def get_table__sql_create(self, schema, table, pg_schema=None):
         
+        self.pk = 1
+        
         if pg_schema is None:
             pg_schema = schema
         
@@ -132,7 +135,6 @@ class Cluster:
         
         columns_schema = self.get_table_schema__dict(schema, table)
         
-        pk = 1
         first = True
         for row_index, (columns_data, row_count) in enumerate(self.get_table_data__generator(schema, table, offset, limit)):
         
@@ -153,7 +155,7 @@ class Cluster:
             else:
                 pass
             
-            values = [str(pk)]
+            values = [str(self.pk)]
             for count, (column_schema, row_data) in enumerate(zip(columns_schema,columns_data)):
                 
                 data_type = column_schema['data_type']
@@ -198,7 +200,7 @@ class Cluster:
             
             yield sql
             
-            pk += 1
+            self.pk += 1
         
         yield '\n;'
     
