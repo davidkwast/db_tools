@@ -33,17 +33,28 @@ class Cluster:
         cur.close()
         return [r[0] for r in rows]
     
-    def get_table_row_count(self, schema, table):
+    def get_table_row_count(self, schema, table, where_clause=None):
         cur = self.conn.cursor()
-        cur.execute(SQL("SELECT COUNT(*) FROM {}.{};").format(Identifier(schema), Identifier(table)))
+        sql = "SELECT COUNT(*) FROM {}.{}"
+        if where_clause:
+            sql += ' WHERE ' + where_clause
+        sql += ';'
+        cur.execute(SQL(sql).format(Identifier(schema), Identifier(table)))
         result = cur.fetchone()
         return result[0]
     
-    def get_table_data__generator(self, schema, table, offset=None, limit=None):
+    def get_table_data__generator(self, schema, table, offset=None, limit=None, select_columns=None, where_clause=None):
         cur = self.conn.cursor()
-        sql = "SELECT * FROM {}.{}"
+        sql = "SELECT "
+        if select_columns:
+            sql += ','.join(select_columns)
+        else:
+            sql += "*"
+        sql += " FROM {}.{}"
+        if where_clause:
+            sql += ' WHERE ' + where_clause
         if offset is not None and limit is not None:
-            sql = sql + ' OFFSET %s LIMIT %s'
+            sql += ' OFFSET %s LIMIT %s'
         sql = SQL(sql).format(Identifier(schema), Identifier(table))
         if offset is not None and limit is not None:
             cur.execute(sql, (offset, limit))
@@ -51,9 +62,10 @@ class Cluster:
             cur.execute(sql)
         for row in cur:
             yield row, cur.rowcount
+        print(sql)
         cur.close()
     
-    def get_table_schema__dict(self, schema, table):
+    def get_table_schema__dict(self, schema, table, select_columns=None):
         cur = self.conn.cursor()
         cur.execute("""
             SELECT c.column_name, c.udt_name, c.data_type,
@@ -71,7 +83,7 @@ class Cluster:
         )
         rows = cur.fetchall()
         cur.close()
-        return [{
+        data = [{
                 'name': r[0],
                 'udt_name': r[1],
                 'data_type': r[2],
@@ -80,16 +92,21 @@ class Cluster:
                 'numeric_precision': r[5],
                 'numeric_scale': r[6],
             } for r in rows]
+        columns = {x['name']:x for x in data}
+        # filter columns from schema
+        if select_columns:
+            data = [columns[x['name']] for x in data if x['name'] in select_columns]
+        return data
     
     
-    def get_table__sql_create(self, schema, table, pg_schema=None):
+    def get_table__sql_create(self, schema, table, pg_schema=None, select_columns=None):
         
         self.pk = 1
         
         if pg_schema is None:
             pg_schema = schema
         
-        data = self.get_table_schema__dict(schema, table)
+        data = self.get_table_schema__dict(schema, table, select_columns)
         if not data:
             raise ValueError('database "{}" not found'.format(schema + '.' + table))
         
@@ -101,7 +118,7 @@ class Cluster:
         sql += "CREATE TABLE {} (\n".format(schema_table)
         
         # injects primary key
-        sql += '    id bigserial PRIMARY KEY,\n'
+        sql += '    id serial PRIMARY KEY,\n'
         
         for count, column in enumerate(data):
             sql += ' '*4
@@ -128,22 +145,25 @@ class Cluster:
         return sql
     
     
-    def get_table__sql_dump_data__generator(self, schema, table, offset=None, limit=None, pg_schema=None):
+    def get_table__sql_dump_data__generator(self, schema, table, offset=None, limit=None, pg_schema=None, select_columns=None, where_clause=None, generate_pk=False):
         
         if pg_schema is None:
             pg_schema = schema
         
-        columns_schema = self.get_table_schema__dict(schema, table)
+        columns_schema = self.get_table_schema__dict(schema, table, select_columns)
         
         first = True
-        for row_index, (columns_data, row_count) in enumerate(self.get_table_data__generator(schema, table, offset, limit)):
+        for row_index, (columns_data, row_count) in enumerate(self.get_table_data__generator(schema, table, offset, limit, select_columns, where_clause)):
         
             sql = ""
             
             if first:
                 first = False
                 
-                sql += "INSERT INTO {} (id, ".format(pg_schema + '.' + table)
+                sql += "INSERT INTO {} (".format(pg_schema + '.' + table)
+                
+                if generate_pk:
+                    sql += "id, "
                 
                 for count, column_schema in enumerate(columns_schema):
                     sql += column_schema['name']
@@ -155,7 +175,10 @@ class Cluster:
             else:
                 pass
             
-            values = [str(self.pk)]
+            values = []
+            if generate_pk:
+                values.append(str(self.pk))
+            
             for count, (column_schema, row_data) in enumerate(zip(columns_schema,columns_data)):
                 
                 data_type = column_schema['data_type']
