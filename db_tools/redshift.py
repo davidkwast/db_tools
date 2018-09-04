@@ -1,3 +1,6 @@
+import unicodedata
+from datetime import datetime, date
+
 import psycopg2
 from psycopg2.sql import SQL, Identifier
 
@@ -62,7 +65,6 @@ class Cluster:
             cur.execute(sql)
         for row in cur:
             yield row, cur.rowcount
-        print(sql)
         cur.close()
     
     def get_table_schema__dict(self, schema, table, select_columns=None):
@@ -84,7 +86,7 @@ class Cluster:
         rows = cur.fetchall()
         cur.close()
         data = [{
-                'name': r[0],
+                'name': unicodedata.normalize('NFKD', r[0].replace(' ','_').replace('%','percent')).encode('ASCII', 'ignore').decode(),
                 'udt_name': r[1],
                 'data_type': r[2],
                 'is_nullable': r[3],
@@ -114,7 +116,7 @@ class Cluster:
         sql = "-- TABLE {}\n".format(schema_table)
         
         schema_table = schema_table.replace('-','_')
-        sql += "DROP TABLE {};\n".format(schema_table)
+        sql += "DROP TABLE IF EXISTS {};\n".format(schema_table)
         sql += "CREATE TABLE {} (\n".format(schema_table)
         
         # injects primary key
@@ -193,7 +195,7 @@ class Cluster:
                     if pg_data_type == 'text':
                         
                         if value:
-                            value = str(psycopg2.extensions.QuotedString(value))
+                            value = str(psycopg2.extensions.QuotedString(value.encode('utf-8')))
                         else:
                             value = 'NULL'
                         
@@ -209,7 +211,8 @@ class Cluster:
                     else:
                         print('-'*80)
                         print(column_schema)
-                        print(row_data)
+                        print(repr(row_data))
+                        print(type(row_data))
                         raise ValueError('ERROR: CHECK VALUE CONVERSION')
                 
                 else:
